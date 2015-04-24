@@ -1,0 +1,57 @@
+Compile and Synthesize
+----------------------
+To Compile and generate executables, type:
+
+Make all
+
+Before running the synthesize script, make sure to have the harmonica netlist (must be named as h2.nand) and the MIPS netlist (must be named as iqyax.nand) in this directory.
+
+Run the following synthesize.sh by typing:
+
+./synthesize.sh
+
+Modules and Interfaces
+-----------------------
+
+1. Top Level Entity
+It is located in top_level.cpp, which contains four node modules and a memory_interconnect module. Each node module has the following interfaces:
+
+-left_port: Memory port that accepts request from the neighbor that is on the left. Responses are forwarded to the left neighbor on this port
+-right_port: Memory port that forwards requests to the right neighbor. Responses are accepted from the right neighbor on this port
+-mem_port: Forwards requests to the memory_interconnect module and accepts responses from the memory module
+
+Top Level module has a memory_interconnect module. The memory_interconnect module has 4 memory port interfaces for each respective node
+
+2. Node module
+Nodes have core, interconnect, L1 cache and L2 cache modules. The core module has a memory port interface for sending requests and accepting responses. The Cache modules have the following interfaces:
+
+-front: The memory port that faces the core and services incoming requests
+-back: The memory port that faces the memory hirearchy and requests data from the next level
+
+The interconnect module has the following interfaces:
+up: memory port facing the core side and forwards requests from the interconnect network
+down: memory port that accepts incoming requests from the network and forwards the request to the L2 Cache
+left: This is the left port described for node module in the top level entity above
+right: This is the left port described for node module in the top level entity above
+
+Platform Information
+---------------------
+1. Introduction
+
+We implement a MIPS and Harmonica four-core topology in CHDL. The network contains 1 MIPS core and 3 Harmonica cores. A memory request from any L1 cache will route to one of the L2 caches and to main memory.  We assume that each core’s L2 cache has the inclusive property, and the routers are implemented such that packets will never be forwarded to other L1s. Specifically, our topology is a ring topology.
+
+2. Request Network
+
+Each core has an 2-input arbiter receiving packets from the core’s caches and neighboring core's routers, a packet buffer for each cache, and a router to forward packets to at least the right neighboring core, and its own L2 cache. When a L2 is unable to satisfy the memory request in a packet sent from an L1, it forwards the request to main memory.
+
+3. Response Network
+
+ Response packets are routed to core that originally sent the memory request packet, along with its caches. For each router, packets can be routed to the neighboring core neighboring or the current core's L1 caches (given that the core is the original requestor).
+
+4. Cache Integration
+
+To integrate the cores into the interconnect network, we use their mem_req and mem_resp interfaces. The mem_req is the request to cache and the mem_resp is the response from the cache. The cache has a front and back interface. The front interface services the core, while the back interface face fetches data from memory if there is a cache miss. The cache can currently support 4 unserviced requests and after that the cache will not accept any requests from the front interface, until a slot is available.
+
+5. Challenges
+
+One of the biggest challenges in the design was to be able to route the memory responses back to the appropriate cores. The problem was solved by appending the core_id to the req_id field in the memory request structure. Since each memory request is paired with a response with the same ID’s response flit’s adress field will be set to the appended core_id on the response_id.
